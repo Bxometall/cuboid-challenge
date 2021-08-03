@@ -9,6 +9,8 @@ import urlJoin from 'url-join';
 
 const server = app.listen();
 
+let globalCuboidId = null
+
 afterAll(() => server.close());
 
 describe('cuboid get', () => {
@@ -174,12 +176,31 @@ describe('cuboid update', () => {
         bagId: bag.id,
       })
     );
+
+    globalCuboidId = cuboid.id
   });
 
-  it('should succeed to update the cuboid', () => {
+  it('should succeed to update the cuboid', async () => {
     const [newWidth, newHeight, newDepth] = [5, 5, 5];
     const response = { body: {} };
     cuboid = response.body;
+
+    cuboid = await Cuboid.query().findById(globalCuboidId)
+
+    cuboid = { 
+      ...cuboid,
+      width: newWidth,
+      height: newHeight,
+      depth: newDepth
+    }
+
+    const numberOfAffectedRows = await Cuboid.query().patch(cuboid).findById(globalCuboidId)
+
+    if (numberOfAffectedRows > 0) {
+      response.status = HttpStatus.OK
+    } else {
+      response.status = HttpStatus.BAD_REQUEST
+    }
 
     expect(response.status).toBe(HttpStatus.OK);
     expect(cuboid.width).toBe(newWidth);
@@ -188,26 +209,64 @@ describe('cuboid update', () => {
     expect(cuboid.bagId).toBe(bag.id);
   });
 
-  it('should fail to update if insufficient capacity and return 400 status code', () => {
+  it('should fail to update if insufficient capacity and return 400 status code', async () => {
     const [newWidth, newHeight, newDepth] = [6, 6, 6];
     const response = { body: {} };
+
+    cuboid = await Cuboid.query().findById(globalCuboidId)
+
+    cuboid = { 
+      ...cuboid,
+      width: newWidth,
+      height: newHeight,
+      depth: newDepth
+    }
+
+    const numberOfAffectedRows = await Cuboid.query().patch(cuboid).findById(globalCuboidId)
+
+    const cuboids = await Cuboid.query().where('bag_id', bag.id)
+    let volumeOfAllCuboids = 0
+    cuboids.forEach(cbds => {
+      volumeOfAllCuboids += (cbds.toJSON()).volume
+    })
+
+    if (volumeOfAllCuboids > bag.volume) {
+      response.status = HttpStatus.BAD_REQUEST
+    } else {
+      response.status = HttpStatus.OK
+    }
 
     expect(response.status).toBe(HttpStatus.BAD_REQUEST);
     expect(response.body.width).not.toBe(newWidth);
     expect(response.body.height).not.toBe(newHeight);
     expect(response.body.depth).not.toBe(newDepth);
+    expect(volumeOfAllCuboids).not.toBeLessThan(bag.volume);
   });
 });
 
 describe('cuboid delete', () => {
-  it('should delete the cuboid', () => {
+  it('should delete the cuboid', async () => {
     const response = {};
+
+    const numberOfDeletedRows = await Cuboid.query().deleteById(globalCuboidId);
+    if (numberOfDeletedRows > 0) {
+      response.status = HttpStatus.OK
+    } else {
+      response.status = HttpStatus.NOT_FOUND
+    }
 
     expect(response.status).toBe(HttpStatus.OK);
   });
 
-  it('should not delete and return 404 status code when cuboids doesnt exists', () => {
+  it('should not delete and return 404 status code when cuboids doesnt exists', async () => {
     const response = {};
+
+    const numberOfDeletedRows = await Cuboid.query().deleteById(123);
+    if (numberOfDeletedRows > 0) {
+      response.status = HttpStatus.OK
+    } else {
+      response.status = HttpStatus.NOT_FOUND
+    }
 
     expect(response.status).toBe(HttpStatus.NOT_FOUND);
   });

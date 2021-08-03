@@ -17,4 +17,12 @@ export default class Cuboid extends Base {
       },
     };
   }
+
+  static get virtualAttributes() {
+    return ['volume'];
+  }
+
+  volume() {
+    return this.width * this.height * this.depth
+  }
 }
